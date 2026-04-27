@@ -1,32 +1,44 @@
 class PdfReviewer extends HTMLElement {
   static get observedAttributes() {
-    return [
-      "pdf-url",
-      "confirm-text",
-      "close-text",
-      "primary-color",
-      "font-family"
-    ];
+    return ["pdf-url", "confirm-text", "close-text", "primary-color", "font-family"];
   }
 
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-
-    // Internal state
     this.pdfDoc = null;
     this.pageNum = 1;
     this.pageRendering = false;
     this.pageNumPending = null;
     this.scale = 1.2;
+    this.isInitialized = false;
+  }
 
-    // Build the DOM
+  connectedCallback() {
+    if (!this.isInitialized) {
+      this.renderDOM();
+      this.bindElements();
+      this.isInitialized = true;
+    }
+    
+    if (this.hasAttribute('pdf-url')) {
+      this.loadDocument(this.getAttribute('pdf-url'));
+    }
+  }
+
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (name === 'pdf-url' && oldValue !== newValue && newValue && this.isInitialized) {
+      this.loadDocument(newValue);
+    }
+  }
+
+  renderDOM() {
     const container = document.createElement("div");
     container.className = "pdf-reviewer-container";
 
     container.innerHTML = `
       <div class="pdf-header">
-        <span class="page-info">Page <span id="page_num"></span> of <span id="page_count"></span></span>
+        <span class="page-info">Page <span id="page_num">-</span> of <span id="page_count">-</span></span>
         <div class="pagination-controls">
           <button id="prev-btn" class="icon-btn">◀ Prev</button>
           <button id="next-btn" class="icon-btn">Next ▶</button>
@@ -34,107 +46,98 @@ class PdfReviewer extends HTMLElement {
       </div>
       
       <div class="canvas-container">
-        <canvas id="pdf-canvas"></canvas>
+        <div id="loading-msg" class="info-msg">Initializing Viewer...</div>
+        <canvas id="pdf-canvas" style="display: none;"></canvas>
       </div>
+
       <div class="action-footer">
         <button id="close-btn" class="btn secondary-btn">${this.getAttribute("close-text") || "Close"}</button>
         <button id="confirm-btn" class="btn primary-btn">${this.getAttribute("confirm-text") || "Confirm & Continue"}</button>
       </div>
     `;
 
-    // Attach styles
     const style = document.createElement("style");
     style.textContent = this.getStyles();
 
     this.shadowRoot.append(style, container);
+  }
 
-    // Bind elements
-    this.canvas = this.shadowRoot.getElementById('pdf-canvas');
+  bindElements() {
+    this.canvas = this.shadowRoot.querySelector('#pdf-canvas');
     this.ctx = this.canvas.getContext('2d');
-    this.prevBtn = this.shadowRoot.getElementById('prev-btn');
-    this.nextBtn = this.shadowRoot.getElementById('next-btn');
-    this.closeBtn = this.shadowRoot.getElementById('close-btn');
-    this.confirmBtn = this.shadowRoot.getElementById('confirm-btn');
-    this.pageNumSpan = this.shadowRoot.getElementById('page_num');
-    this.pageCountSpan = this.shadowRoot.getElementById('page_count');
-
-    // Bind Event Listeners
-    this.prevBtn.addEventListener('click', () => this.onPrevPage());
-    this.nextBtn.addEventListener('click', () => this.onNextPage());
+    this.loadingMsg = this.shadowRoot.querySelector('#loading-msg');
     
-    this.closeBtn.addEventListener('click', () => {
-      this.dispatchEvent(new CustomEvent('review-action', {
-        detail: { status: 'closed', message: 'User closed the document' },
-        bubbles: true,
-        composed: true
-      }));
+    this.shadowRoot.querySelector('#prev-btn').addEventListener('click', () => this.onPrevPage());
+    this.shadowRoot.querySelector('#next-btn').addEventListener('click', () => this.onNextPage());
+    
+    this.shadowRoot.querySelector('#close-btn').addEventListener('click', () => {
+      this.dispatchEvent(new CustomEvent('review-action', { detail: { status: 'closed' }, bubbles: true, composed: true }));
     });
 
-    this.confirmBtn.addEventListener('click', () => {
-      this.dispatchEvent(new CustomEvent('review-action', {
-        detail: { status: 'confirmed', message: 'User confirmed the document' },
-        bubbles: true,
-        composed: true
-      }));
+    this.shadowRoot.querySelector('#confirm-btn').addEventListener('click', () => {
+      this.dispatchEvent(new CustomEvent('review-action', { detail: { status: 'confirmed' }, bubbles: true, composed: true }));
     });
   }
 
-  connectedCallback() {
-    this.initPdfWorkers();
-    if (this.hasAttribute('pdf-url')) {
-      this.loadDocument(this.getAttribute('pdf-url'));
+  // Dynamically import the .mjs module if the global isn't ready
+  async initPdfLib() {
+    if (window.pdfjsLib) return window.pdfjsLib;
+    
+    try {
+      const module = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.mjs");
+      window.pdfjsLib = module;
+      return module;
+    } catch (e) {
+      console.error("Failed to import pdf.mjs dynamically:", e);
+      return null;
     }
   }
 
-  attributeChangedCallback(name, oldValue, newValue) {
-    if (name === 'pdf-url' && oldValue !== newValue && newValue) {
-      this.loadDocument(newValue);
-    }
-  }
-  initPdfWorkers() {
-    if (!window.pdfjsLib) return;
-    
-    const workerUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-    
-    if (pdfjsLib.GlobalWorkerOptions.workerSrc !== workerUrl) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-    }
-  }
+  async loadDocument(url) {
+    this.loadingMsg.style.display = 'block';
+    this.loadingMsg.innerHTML = "Loading PDF Engine...";
+    this.canvas.style.display = 'none';
 
-  loadDocument(url) {
-    if (!window.pdfjsLib) {
-      console.error("PDF.js library not found on window object.");
+    const pdfjs = await this.initPdfLib();
+    
+    if (!pdfjs) {
+      this.loadingMsg.innerHTML = `<span style="color: #f44336;">Error: PDF.js library failed to load.</span>`;
       return;
     }
 
-    // Fetch the PDF using pdf.js (bypasses Content-Disposition headers)
-    const loadingTask = pdfjsLib.getDocument(url);
-    
-    loadingTask.promise.then((pdf) => {
+    // Matches your prod implementation EXACTLY
+    if (pdfjs.GlobalWorkerOptions.workerSrc !== "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.mjs") {
+      pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.mjs";
+    }
+
+    this.loadingMsg.innerHTML = "Downloading Document...";
+
+    try {
+      const loadingTask = pdfjs.getDocument(url);
+      const pdf = await loadingTask.promise;
+      
       this.pdfDoc = pdf;
-      this.pageCountSpan.textContent = pdf.numPages;
+      this.shadowRoot.querySelector('#page_count').textContent = pdf.numPages;
+      this.loadingMsg.style.display = 'none';
+      this.canvas.style.display = 'block';
+      
       this.renderPage(this.pageNum);
-    }).catch((error) => {
-      console.error("Error loading PDF:", error);
-      this.canvas.parentElement.innerHTML = `<div class="error-msg">Failed to load PDF. It might be expired or blocked by CORS.</div>`;
-    });
+    } catch (error) {
+      console.error("PDF Load Error:", error);
+      this.loadingMsg.innerHTML = `<span style="color: #f44336;">Failed to load PDF. Signature might be expired.</span>`;
+    }
   }
 
   renderPage(num) {
     this.pageRendering = true;
-    
     this.pdfDoc.getPage(num).then((page) => {
       const viewport = page.getViewport({ scale: this.scale });
       this.canvas.height = viewport.height;
       this.canvas.width = viewport.width;
 
-      const renderContext = {
-        canvasContext: this.ctx,
-        viewport: viewport
-      };
+      const renderContext = { canvasContext: this.ctx, viewport: viewport };
       
-      const renderTask = page.render(renderContext);
-      renderTask.promise.then(() => {
+      page.render(renderContext).promise.then(() => {
         this.pageRendering = false;
         if (this.pageNumPending !== null) {
           this.renderPage(this.pageNumPending);
@@ -143,7 +146,7 @@ class PdfReviewer extends HTMLElement {
       });
     });
 
-    this.pageNumSpan.textContent = num;
+    this.shadowRoot.querySelector('#page_num').textContent = num;
   }
 
   queueRenderPage(num) {
@@ -155,13 +158,13 @@ class PdfReviewer extends HTMLElement {
   }
 
   onPrevPage() {
-    if (this.pageNum <= 1) return;
+    if (!this.pdfDoc || this.pageNum <= 1) return;
     this.pageNum--;
     this.queueRenderPage(this.pageNum);
   }
 
   onNextPage() {
-    if (this.pageNum >= this.pdfDoc.numPages) return;
+    if (!this.pdfDoc || this.pageNum >= this.pdfDoc.numPages) return;
     this.pageNum++;
     this.queueRenderPage(this.pageNum);
   }
@@ -192,14 +195,8 @@ class PdfReviewer extends HTMLElement {
         background-color: #191919;
         border-bottom: 1px solid #FFFFFF1A;
       }
-      .page-info {
-        font-size: 14px;
-        color: #FFFFFFCC;
-      }
-      .pagination-controls {
-        display: flex;
-        gap: 8px;
-      }
+      .page-info { font-size: 14px; color: #FFFFFFCC; }
+      .pagination-controls { display: flex; gap: 8px; }
       .icon-btn {
         background: transparent;
         border: 1px solid #FFFFFF33;
@@ -209,22 +206,17 @@ class PdfReviewer extends HTMLElement {
         cursor: pointer;
         font-size: 12px;
       }
-      .icon-btn:hover {
-        background: #FFFFFF1A;
-      }
+      .icon-btn:hover { background: #FFFFFF1A; }
       .canvas-container {
         flex-grow: 1;
         overflow: auto;
         display: flex;
         justify-content: center;
+        align-items: center;
         padding: 20px;
         background-color: #2F2F2F;
       }
-      #pdf-canvas {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        max-width: 100%;
-        height: auto;
-      }
+      #pdf-canvas { box-shadow: 0 4px 8px rgba(0,0,0,0.3); max-width: 100%; height: auto; }
       .action-footer {
         display: flex;
         justify-content: flex-end;
@@ -242,20 +234,9 @@ class PdfReviewer extends HTMLElement {
         font-size: 14px;
         border: none;
       }
-      .secondary-btn {
-        background-color: transparent;
-        color: #FFFFFF;
-        border: 1px solid #FFFFFF66;
-      }
-      .primary-btn {
-        background-color: ${primaryColor};
-        color: #FFFFFF;
-      }
-      .error-msg {
-        color: #f44336;
-        text-align: center;
-        margin-top: 20px;
-      }
+      .secondary-btn { background-color: transparent; color: #FFFFFF; border: 1px solid #FFFFFF66; }
+      .primary-btn { background-color: ${primaryColor}; color: #FFFFFF; }
+      .info-msg { color: #FFFFFFCC; font-size: 14px; }
     `;
   }
 }
