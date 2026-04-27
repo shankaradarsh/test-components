@@ -91,12 +91,13 @@ class PdfReviewer extends HTMLElement {
       this.loadDocument(newValue);
     }
   }
-
   initPdfWorkers() {
-    // Ensure worker is loaded (matching your existing implementation)
     if (!window.pdfjsLib) return;
-    if (pdfjsLib.GlobalWorkerOptions.workerSrc !== "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js") {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    
+    const workerUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    
+    if (pdfjsLib.GlobalWorkerOptions.workerSrc !== workerUrl) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
     }
   }
 
