@@ -77,6 +77,7 @@ class PdfConfirmGate extends HTMLElement {
 
     openNativeViewer() {
         let base64Data = this.getAttribute('pdf-base64');
+        console.log("RAW BACKEND STRING START:", base64Data.substring(0, 50));
 
         if (!base64Data || base64Data === 'null' || base64Data === '') {
             alert("Document data is missing or hasn't loaded yet.");
