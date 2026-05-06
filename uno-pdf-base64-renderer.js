@@ -51,7 +51,7 @@ class PdfConfirmGate extends HTMLElement {
         });
 
         this.continueBtn.addEventListener('click', () => {
-            this.dispatchEvent(new CustomEvent('review-action', {
+            this.dispatchEvent(new CustomEvent('button-click', {
                 detail: { status: 'confirmed' },
                 bubbles: true,
                 composed: true
@@ -112,7 +112,7 @@ class PdfConfirmGate extends HTMLElement {
             const blobUrl = URL.createObjectURL(blob);
 
             // Open in the browser's native viewer tab
-            window.open(blobUrl, '_blank');
+            window.open(blobUrl, '_blank', 'width=850,height=900,left=200,top=100');
 
         } catch (err) {
             console.error("Failed to decode and open PDF:", err);
