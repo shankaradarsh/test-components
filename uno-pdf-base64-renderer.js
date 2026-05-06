@@ -83,11 +83,19 @@ class PdfConfirmGate extends HTMLElement {
             return;
         }
 
-        // 1. Strip out the data: URL prefix if the backend accidentally included it
+        // 1. Strip the data URI prefix if present
         base64Data = base64Data.replace(/^data:application\/pdf;base64,/, "");
 
-        // 2. THE FIX: Strip out all whitespaces, newlines, and invalid characters
+        // 2. Convert URL-safe Base64 to Standard Base64 (swaps - and _)
+        base64Data = base64Data.replace(/-/g, '+').replace(/_/g, '/');
+
+        // 3. Strip EVERYTHING that isn't a valid Base64 character
         base64Data = base64Data.replace(/[^A-Za-z0-9+/=]/g, "");
+
+        // 4. Force the string length to be a multiple of 4 using padding
+        while (base64Data.length % 4 !== 0) {
+            base64Data += "=";
+        }
 
         try {
             // Decode Base64 securely
@@ -98,7 +106,7 @@ class PdfConfirmGate extends HTMLElement {
             }
             const byteArray = new Uint8Array(byteNumbers);
 
-            // Create a Blob and Object URL to bypass Chrome's top-level data URI block
+            // Create a Blob and Object URL
             const blob = new Blob([byteArray], { type: 'application/pdf' });
             const blobUrl = URL.createObjectURL(blob);
 
