@@ -1,23 +1,23 @@
 class PdfConfirmGate extends HTMLElement {
-  static get observedAttributes() {
-    return [
-      "pdf-base64", 
-      "view-btn-text", 
-      "checkbox-text", 
-      "continue-btn-text", 
-      "primary-color",
-      "font-family"
-    ];
-  }
+    static get observedAttributes() {
+        return [
+            "pdf-base64",
+            "view-btn-text",
+            "checkbox-text",
+            "continue-btn-text",
+            "primary-color",
+            "font-family"
+        ];
+    }
 
-  constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-    
-    const container = document.createElement('div');
-    container.className = 'gate-container';
-    
-    container.innerHTML = `
+    constructor() {
+        super();
+        this.attachShadow({ mode: "open" });
+
+        const container = document.createElement('div');
+        container.className = 'gate-container';
+
+        container.innerHTML = `
       <div class="action-card">
         <button id="view-pdf-btn" class="btn outline-btn">
           📄 <span id="view-text">View PDF</span>
@@ -34,85 +34,88 @@ class PdfConfirmGate extends HTMLElement {
         </button>
       </div>
     `;
-    
-    const style = document.createElement('style');
-    this.shadowRoot.append(style, container);
-    
-    // Bind elements
-    this.viewBtn = this.shadowRoot.getElementById('view-pdf-btn');
-    this.checkbox = this.shadowRoot.getElementById('confirm-checkbox');
-    this.continueBtn = this.shadowRoot.getElementById('continue-btn');
 
-    // Event Listeners
-    this.viewBtn.addEventListener('click', () => this.openNativeViewer());
-    
-    this.checkbox.addEventListener('change', (e) => {
-      this.continueBtn.disabled = !e.target.checked;
-    });
+        const style = document.createElement('style');
+        this.shadowRoot.append(style, container);
 
-    this.continueBtn.addEventListener('click', () => {
-      this.dispatchEvent(new CustomEvent('review-action', {
-        detail: { status: 'confirmed' },
-        bubbles: true,
-        composed: true
-      }));
-    });
-  }
+        // Bind elements
+        this.viewBtn = this.shadowRoot.getElementById('view-pdf-btn');
+        this.checkbox = this.shadowRoot.getElementById('confirm-checkbox');
+        this.continueBtn = this.shadowRoot.getElementById('continue-btn');
 
-  connectedCallback() {
-    this.renderStyles();
-    this.updateText();
-  }
+        // Event Listeners
+        this.viewBtn.addEventListener('click', () => this.openNativeViewer());
 
-  attributeChangedCallback() {
-    this.renderStyles();
-    this.updateText();
-  }
+        this.checkbox.addEventListener('change', (e) => {
+            this.continueBtn.disabled = !e.target.checked;
+        });
 
-  updateText() {
-    this.shadowRoot.getElementById('view-text').textContent = this.getAttribute('view-btn-text') || "View PDF";
-    this.shadowRoot.getElementById('check-text').textContent = this.getAttribute('checkbox-text') || "I confirm this document is accurate and good to proceed.";
-    this.shadowRoot.getElementById('continue-text').textContent = this.getAttribute('continue-btn-text') || "Continue";
-  }
-
-  openNativeViewer() {
-    let base64Data = this.getAttribute('pdf-base64');
-    
-    if (!base64Data || base64Data === 'null' || base64Data === '') {
-      alert("Document data is missing or hasn't loaded yet.");
-      return;
+        this.continueBtn.addEventListener('click', () => {
+            this.dispatchEvent(new CustomEvent('review-action', {
+                detail: { status: 'confirmed' },
+                bubbles: true,
+                composed: true
+            }));
+        });
     }
 
-    // Strip out the data: URL prefix if the backend accidentally included it
-    base64Data = base64Data.replace(/^data:application\/pdf;base64,/, "");
-
-    try {
-      // Decode Base64 securely
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      
-      // Create a Blob and Object URL to bypass Chrome's top-level data URI block
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
-      const blobUrl = URL.createObjectURL(blob);
-      
-      // Open in the browser's native viewer tab
-      window.open(blobUrl, '_blank');
-      
-    } catch (err) {
-      console.error("Failed to decode and open PDF:", err);
-      alert("Failed to read document data. The file might be corrupted.");
+    connectedCallback() {
+        this.renderStyles();
+        this.updateText();
     }
-  }
 
-  renderStyles() {
-    const primaryColor = this.getAttribute('primary-color') || "#542783";
-    const font = this.getAttribute('font-family') || "Inter, sans-serif";
-    
-    this.shadowRoot.querySelector('style').textContent = `
+    attributeChangedCallback() {
+        this.renderStyles();
+        this.updateText();
+    }
+
+    updateText() {
+        this.shadowRoot.getElementById('view-text').textContent = this.getAttribute('view-btn-text') || "View PDF";
+        this.shadowRoot.getElementById('check-text').textContent = this.getAttribute('checkbox-text') || "I confirm this document is accurate and good to proceed.";
+        this.shadowRoot.getElementById('continue-text').textContent = this.getAttribute('continue-btn-text') || "Continue";
+    }
+
+    openNativeViewer() {
+        let base64Data = this.getAttribute('pdf-base64');
+
+        if (!base64Data || base64Data === 'null' || base64Data === '') {
+            alert("Document data is missing or hasn't loaded yet.");
+            return;
+        }
+
+        // 1. Strip out the data: URL prefix if the backend accidentally included it
+        base64Data = base64Data.replace(/^data:application\/pdf;base64,/, "");
+
+        // 2. THE FIX: Strip out all whitespaces, newlines, and invalid characters
+        base64Data = base64Data.replace(/[^A-Za-z0-9+/=]/g, "");
+
+        try {
+            // Decode Base64 securely
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+
+            // Create a Blob and Object URL to bypass Chrome's top-level data URI block
+            const blob = new Blob([byteArray], { type: 'application/pdf' });
+            const blobUrl = URL.createObjectURL(blob);
+
+            // Open in the browser's native viewer tab
+            window.open(blobUrl, '_blank');
+
+        } catch (err) {
+            console.error("Failed to decode and open PDF:", err);
+            alert("Failed to read document data. The file might be corrupted.");
+        }
+    }
+
+    renderStyles() {
+        const primaryColor = this.getAttribute('primary-color') || "#542783";
+        const font = this.getAttribute('font-family') || "Inter, sans-serif";
+
+        this.shadowRoot.querySelector('style').textContent = `
       .gate-container {
         font-family: ${font};
         color: #fff;
@@ -180,7 +183,7 @@ class PdfConfirmGate extends HTMLElement {
         line-height: 1.4;
       }
     `;
-  }
+    }
 }
 
 customElements.define("uno-pdf-confirm-gate", PdfConfirmGate);
