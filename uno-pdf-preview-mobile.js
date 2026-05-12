@@ -120,7 +120,7 @@ class PdfMobileRenderer extends HTMLElement {
       // THE FIX: Move this inside the Try/Catch, and safely check if GlobalWorkerOptions exists
       if (pdfjs.GlobalWorkerOptions) {
         const currentVersion = pdfjs.version || "4.9.155"; 
-        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${currentVersion}/pdf.worker.min.js`;
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${currentVersion}/pdf.worker.min.mjs`;
       } else {
         console.warn("GlobalWorkerOptions not found on the pdfjs object.");
       }
