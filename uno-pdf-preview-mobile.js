@@ -110,18 +110,6 @@ class PdfMobileRenderer extends HTMLElement {
     if (!base64String || base64String === 'null') return;
 
     this.loadingMsg.style.display = 'block';
-    this.scrollView.innerHTML = ''; // clear previous
-
-    const pdfjs = await this.initPdfLib();
-    if (!pdfjs) {
-      this.loadingMsg.innerHTML = `<span style="color: #f44336;">Error: PDF Engine failed to load.</span>`;
-      return;
-    }
-
-    async loadDocument(base64String) {
-    if (!base64String || base64String === 'null') return;
-
-    this.loadingMsg.style.display = 'block';
     this.scrollView.innerHTML = ''; 
 
     const pdfjs = await this.initPdfLib();
