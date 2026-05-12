@@ -12,6 +12,7 @@ class PdfMobileRenderer extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this.isInitialized = false;
+    this.zoomLevel = 100;
   }
 
   connectedCallback() {
@@ -33,8 +34,16 @@ class PdfMobileRenderer extends HTMLElement {
     container.innerHTML = `
       <div id="loading-msg" class="info-msg">Loading Document...</div>
       
-      <div id="pdf-scroll-view" class="pdf-scroll-view">
+      <div class="pdf-wrapper">
+        <div id="pdf-scroll-view" class="pdf-scroll-view">
+          </div>
+        
+        <div class="zoom-controls" id="zoom-controls" style="display: none;">
+          <button id="zoom-out-btn" class="zoom-btn">−</button>
+          <span id="zoom-text">100%</span>
+          <button id="zoom-in-btn" class="zoom-btn">+</button>
         </div>
+      </div>
 
       <div class="action-footer">
         <label class="checkbox-container">
@@ -60,13 +69,17 @@ class PdfMobileRenderer extends HTMLElement {
     this.loadingMsg = this.shadowRoot.getElementById('loading-msg');
     this.checkbox = this.shadowRoot.getElementById('confirm-checkbox');
     this.continueBtn = this.shadowRoot.getElementById('continue-btn');
+    this.zoomControls = this.shadowRoot.getElementById('zoom-controls');
+    this.zoomText = this.shadowRoot.getElementById('zoom-text');
     
+    this.shadowRoot.getElementById('zoom-in-btn').addEventListener('click', () => this.handleZoom(25));
+    this.shadowRoot.getElementById('zoom-out-btn').addEventListener('click', () => this.handleZoom(-25));
+
     this.checkbox.addEventListener('change', (e) => {
       this.continueBtn.disabled = !e.target.checked;
     });
 
     this.continueBtn.addEventListener('click', () => {
-      // Dispatches exactly what your SDK routing engine expects
       this.dispatchEvent(new CustomEvent('button-click', { 
         detail: { status: 'confirmed' }, 
         bubbles: true, 
@@ -75,7 +88,22 @@ class PdfMobileRenderer extends HTMLElement {
     });
   }
 
-  // The Bulletproof Base64 Sanitizer
+  handleZoom(delta) {
+    this.zoomLevel = Math.max(100, Math.min(250, this.zoomLevel + delta));
+    this.zoomText.textContent = this.zoomLevel + '%';
+
+    const canvases = this.shadowRoot.querySelectorAll('.pdf-page-canvas');
+    canvases.forEach(canvas => {
+      if (this.zoomLevel === 100) {
+        canvas.style.width = '100%';
+        canvas.style.maxWidth = '100%';
+      } else {
+        canvas.style.maxWidth = 'none';
+        canvas.style.width = this.zoomLevel + '%';
+      }
+    });
+  }
+
   base64ToArrayBuffer(base64Data) {
     base64Data = base64Data.replace(/^data:application\/pdf;base64,/, "");
     base64Data = base64Data.replace(/-/g, '+').replace(/_/g, '/');
@@ -93,7 +121,6 @@ class PdfMobileRenderer extends HTMLElement {
     return new Uint8Array(byteNumbers).buffer;
   }
 
-// Dynamically import the exact version your environment expects if it's missing
   async initPdfLib() {
     if (window.pdfjsLib) return window.pdfjsLib;
     try {
@@ -117,7 +144,6 @@ class PdfMobileRenderer extends HTMLElement {
         throw new Error("PDF Engine failed to load.");
       }
 
-      // THE FIX: Move this inside the Try/Catch, and safely check if GlobalWorkerOptions exists
       if (pdfjs.GlobalWorkerOptions) {
         const currentVersion = pdfjs.version || "4.9.155"; 
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${currentVersion}/pdf.worker.min.mjs`;
@@ -130,8 +156,8 @@ class PdfMobileRenderer extends HTMLElement {
       const pdf = await loadingTask.promise;
       
       this.loadingMsg.style.display = 'none';
+      this.zoomControls.style.display = 'flex';
       
-      // Render all pages sequentially into the scroll view
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         await this.renderSinglePage(pdf, pageNum);
       }
@@ -150,13 +176,12 @@ class PdfMobileRenderer extends HTMLElement {
   async renderSinglePage(pdf, pageNum) {
     const page = await pdf.getPage(pageNum);
     
-    // Create a new canvas for this specific page
     const canvas = document.createElement('canvas');
     canvas.className = 'pdf-page-canvas';
     this.scrollView.appendChild(canvas);
 
-    // Render at 1.5x scale for crisp mobile display, CSS will scale it down to fit screen width
-    const viewport = page.getViewport({ scale: 1.5 });
+    // CHANGED: Render at 2.0x scale for high-end device crispness
+    const viewport = page.getViewport({ scale: 2.0 });
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
@@ -165,7 +190,6 @@ class PdfMobileRenderer extends HTMLElement {
       viewport: viewport 
     };
     
-    // Await ensures we don't crash low-end mobile devices by rendering 25 pages simultaneously
     await page.render(renderContext).promise;
   }
 
@@ -174,7 +198,6 @@ class PdfMobileRenderer extends HTMLElement {
     const primaryColor = this.getAttribute("primary-color") || "#542783";
     
     return `
-      /* Force the custom web component tag to strictly fill its parent SDK container */
       :host {
         display: block;
         width: 100%;
@@ -185,7 +208,7 @@ class PdfMobileRenderer extends HTMLElement {
         display: flex;
         flex-direction: column;
         width: 100%;
-        height: 100%; /* Swapped from 85vh to 100% */
+        height: 100%;
         background-color: #191919;
         border: 1px solid #FFFFFF1A;
         border-radius: 8px;
@@ -193,14 +216,17 @@ class PdfMobileRenderer extends HTMLElement {
         color: #fff;
         overflow: hidden;
       }
-      .info-msg { 
-        color: #FFFFFFCC; 
-        font-size: 14px; 
-        text-align: center; 
-        padding: 10px; 
+      .info-msg { color: #FFFFFFCC; font-size: 14px; text-align: center; padding: 10px; }
+      
+      .pdf-wrapper {
+        position: relative;
+        flex-grow: 1;
+        display: flex;
+        overflow: hidden;
       }
       .pdf-scroll-view {
-        flex-grow: 1; /* This forces the PDF area to absorb exactly whatever height is leftover */
+        width: 100%;
+        height: 100%;
         overflow-y: auto;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch; 
@@ -208,16 +234,55 @@ class PdfMobileRenderer extends HTMLElement {
         padding: 6px;
         display: flex;
         flex-direction: column;
-        align-items: center;
+        align-items: center; 
         gap: 8px;
+        box-sizing: border-box;
       }
       .pdf-page-canvas { 
         max-width: 100%; 
+        width: 100%;
         height: auto; 
         box-shadow: 0 4px 8px rgba(0,0,0,0.4); 
         background-color: white;
+        transition: width 0.2s ease-out; 
       }
-      /* Squashed the footer down to save precious screen real estate */
+
+      /* CHANGED: Zoom controls moved to the top right */
+      .zoom-controls {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        background-color: rgba(25, 25, 25, 0.85);
+        border: 1px solid #FFFFFF33;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        padding: 4px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        backdrop-filter: blur(4px);
+      }
+      .zoom-btn {
+        background: transparent;
+        color: #fff;
+        border: none;
+        font-size: 20px;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        border-radius: 50%;
+      }
+      .zoom-btn:active { background-color: #FFFFFF33; }
+      #zoom-text {
+        font-size: 12px;
+        font-weight: 600;
+        width: 44px;
+        text-align: center;
+        color: #FFF;
+      }
+
       .action-footer {
         display: flex;
         flex-direction: column;
@@ -225,21 +290,12 @@ class PdfMobileRenderer extends HTMLElement {
         padding: 10px;
         background-color: #272626;
         border-top: 1px solid #FFFFFF1A;
-        flex-shrink: 0; /* Prevents the footer from getting crushed */
+        flex-shrink: 0; 
       }
       .checkbox-container { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
       .checkbox-container input { width: 18px; height: 18px; cursor: pointer; accent-color: ${primaryColor}; margin-top: 2px; }
       .check-label { font-size: 13px; color: #FFFFFFCC; line-height: 1.3; }
-      .btn {
-        padding: 12px 20px; /* Slimmer button */
-        border-radius: 6px;
-        font-weight: 500;
-        cursor: pointer;
-        font-family: ${fontFamily};
-        font-size: 14px;
-        border: none;
-        width: 100%;
-      }
+      .btn { padding: 12px 20px; border-radius: 6px; font-weight: 500; cursor: pointer; font-family: ${fontFamily}; font-size: 14px; border: none; width: 100%; }
       .primary-btn { background-color: ${primaryColor}; color: #FFFFFF; }
       .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     `;
