@@ -93,16 +93,15 @@ class PdfMobileRenderer extends HTMLElement {
     return new Uint8Array(byteNumbers).buffer;
   }
 
-  // Dynamically import the prod-tested .mjs module
+// Dynamically import the exact version your environment expects if it's missing
   async initPdfLib() {
     if (window.pdfjsLib) return window.pdfjsLib;
     try {
-      const module = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.mjs");
+      const module = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.mjs");
       window.pdfjsLib = module;
       return module;
     } catch (e) {
-      console.error("Failed to import pdf.mjs:", e);
-      return null;
+      throw new Error("Failed to import pdf.mjs: " + e.message);
     }
   }
 
@@ -112,17 +111,20 @@ class PdfMobileRenderer extends HTMLElement {
     this.loadingMsg.style.display = 'block';
     this.scrollView.innerHTML = ''; 
 
-    const pdfjs = await this.initPdfLib();
-    if (!pdfjs) {
-      this.loadingMsg.innerHTML = `<span style="color: #f44336;">Error: PDF Engine failed to load.</span>`;
-      return;
-    }
-
-    // THE FIX: Ask the API what version it is, and get the exact matching worker (.min.js for WebView compatibility)
-    const currentVersion = pdfjs.version || "3.11.174"; 
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${currentVersion}/pdf.worker.min.js`;
-
     try {
+      const pdfjs = await this.initPdfLib();
+      if (!pdfjs) {
+        throw new Error("PDF Engine failed to load.");
+      }
+
+      // THE FIX: Move this inside the Try/Catch, and safely check if GlobalWorkerOptions exists
+      if (pdfjs.GlobalWorkerOptions) {
+        const currentVersion = pdfjs.version || "4.9.155"; 
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${currentVersion}/pdf.worker.min.js`;
+      } else {
+        console.warn("GlobalWorkerOptions not found on the pdfjs object.");
+      }
+
       const pdfData = this.base64ToArrayBuffer(base64String);
       const loadingTask = pdfjs.getDocument({ data: pdfData });
       const pdf = await loadingTask.promise;
@@ -139,30 +141,8 @@ class PdfMobileRenderer extends HTMLElement {
       this.loadingMsg.innerHTML = `<span style="color: #f44336; font-size: 12px; word-break: break-all;">
         <strong>Crash Report:</strong><br/>
         ${error.message || error}<br/><br/>
-        <strong>Base64 Length:</strong> ${base64String ? base64String.length : 0} chars
-      </span>`;
-    }
-  }
-
-    try {
-      const pdfData = this.base64ToArrayBuffer(base64String);
-      const loadingTask = pdfjs.getDocument({ data: pdfData });
-      const pdf = await loadingTask.promise;
-      
-      this.loadingMsg.style.display = 'none';
-      
-      // Render all pages sequentially into the scroll view
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        await this.renderSinglePage(pdf, pageNum);
-      }
-      
-    } catch (error) {
-      console.error("PDF Render Error:", error);
-      // Print the ACTUAL error to the mobile screen so we don't have to guess
-      this.loadingMsg.innerHTML = `<span style="color: #f44336; font-size: 12px; word-break: break-all;">
-        <strong>Crash Report:</strong><br/>
-        ${error.message || error}<br/><br/>
-        <strong>Base64 Length:</strong> ${base64String ? base64String.length : 0} chars
+        <strong>Stack Trace:</strong><br/>
+        ${error.stack ? error.stack.substring(0, 200) : 'N/A'}
       </span>`;
     }
   }
