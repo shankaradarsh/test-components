@@ -118,7 +118,43 @@ class PdfMobileRenderer extends HTMLElement {
       return;
     }
 
-    pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.mjs";
+    async loadDocument(base64String) {
+    if (!base64String || base64String === 'null') return;
+
+    this.loadingMsg.style.display = 'block';
+    this.scrollView.innerHTML = ''; 
+
+    const pdfjs = await this.initPdfLib();
+    if (!pdfjs) {
+      this.loadingMsg.innerHTML = `<span style="color: #f44336;">Error: PDF Engine failed to load.</span>`;
+      return;
+    }
+
+    // THE FIX: Ask the API what version it is, and get the exact matching worker (.min.js for WebView compatibility)
+    const currentVersion = pdfjs.version || "3.11.174"; 
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${currentVersion}/pdf.worker.min.js`;
+
+    try {
+      const pdfData = this.base64ToArrayBuffer(base64String);
+      const loadingTask = pdfjs.getDocument({ data: pdfData });
+      const pdf = await loadingTask.promise;
+      
+      this.loadingMsg.style.display = 'none';
+      
+      // Render all pages sequentially into the scroll view
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        await this.renderSinglePage(pdf, pageNum);
+      }
+      
+    } catch (error) {
+      console.error("PDF Render Error:", error);
+      this.loadingMsg.innerHTML = `<span style="color: #f44336; font-size: 12px; word-break: break-all;">
+        <strong>Crash Report:</strong><br/>
+        ${error.message || error}<br/><br/>
+        <strong>Base64 Length:</strong> ${base64String ? base64String.length : 0} chars
+      </span>`;
+    }
+  }
 
     try {
       const pdfData = this.base64ToArrayBuffer(base64String);
