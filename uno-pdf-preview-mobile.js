@@ -174,11 +174,18 @@ class PdfMobileRenderer extends HTMLElement {
     const primaryColor = this.getAttribute("primary-color") || "#542783";
     
     return `
+      /* Force the custom web component tag to strictly fill its parent SDK container */
+      :host {
+        display: block;
+        width: 100%;
+        height: 100%; 
+        box-sizing: border-box;
+      }
       .mobile-renderer-container {
         display: flex;
         flex-direction: column;
         width: 100%;
-        height: 85vh; /* Takes up majority of the mobile screen */
+        height: 100%; /* Swapped from 85vh to 100% */
         background-color: #191919;
         border: 1px solid #FFFFFF1A;
         border-radius: 8px;
@@ -190,19 +197,19 @@ class PdfMobileRenderer extends HTMLElement {
         color: #FFFFFFCC; 
         font-size: 14px; 
         text-align: center; 
-        padding: 20px; 
+        padding: 10px; 
       }
       .pdf-scroll-view {
-        flex-grow: 1;
+        flex-grow: 1; /* This forces the PDF area to absorb exactly whatever height is leftover */
         overflow-y: auto;
         overflow-x: auto;
-        -webkit-overflow-scrolling: touch; /* Smooth mobile scrolling */
+        -webkit-overflow-scrolling: touch; 
         background-color: #2F2F2F;
-        padding: 10px;
+        padding: 6px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 12px;
+        gap: 8px;
       }
       .pdf-page-canvas { 
         max-width: 100%; 
@@ -210,24 +217,26 @@ class PdfMobileRenderer extends HTMLElement {
         box-shadow: 0 4px 8px rgba(0,0,0,0.4); 
         background-color: white;
       }
+      /* Squashed the footer down to save precious screen real estate */
       .action-footer {
         display: flex;
         flex-direction: column;
-        gap: 16px;
-        padding: 16px;
+        gap: 10px; 
+        padding: 10px;
         background-color: #272626;
         border-top: 1px solid #FFFFFF1A;
+        flex-shrink: 0; /* Prevents the footer from getting crushed */
       }
-      .checkbox-container { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
-      .checkbox-container input { width: 20px; height: 20px; cursor: pointer; accent-color: ${primaryColor}; margin-top: 2px; }
-      .check-label { font-size: 14px; color: #FFFFFFCC; line-height: 1.4; }
+      .checkbox-container { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+      .checkbox-container input { width: 18px; height: 18px; cursor: pointer; accent-color: ${primaryColor}; margin-top: 2px; }
+      .check-label { font-size: 13px; color: #FFFFFFCC; line-height: 1.3; }
       .btn {
-        padding: 14px 24px;
+        padding: 12px 20px; /* Slimmer button */
         border-radius: 6px;
         font-weight: 500;
         cursor: pointer;
         font-family: ${fontFamily};
-        font-size: 16px;
+        font-size: 14px;
         border: none;
         width: 100%;
       }
