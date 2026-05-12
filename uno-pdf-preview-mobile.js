@@ -214,16 +214,16 @@ class PdfMobileRenderer extends HTMLElement {
         border-radius: 8px;
         font-family: ${fontFamily};
         color: #fff;
-        overflow: hidden;
       }
       .info-msg { color: #FFFFFFCC; font-size: 14px; text-align: center; padding: 10px; }
       
       .pdf-wrapper {
         position: relative;
         flex-grow: 1;
-        display: flex;
         overflow: hidden;
       }
+      
+      /* CHANGED: Removed Flexbox to prevent left-side clipping on zoom */
       .pdf-scroll-view {
         width: 100%;
         height: 100%;
@@ -232,33 +232,35 @@ class PdfMobileRenderer extends HTMLElement {
         -webkit-overflow-scrolling: touch; 
         background-color: #2F2F2F;
         padding: 6px;
-        display: flex;
-        flex-direction: column;
-        align-items: center; 
-        gap: 8px;
         box-sizing: border-box;
+        text-align: center; /* Natively centers the canvas without trapping it */
       }
+      
+      /* CHANGED: Switched to inline-block to respect text-align, added bottom margin */
       .pdf-page-canvas { 
+        display: inline-block;
         max-width: 100%; 
         width: 100%;
         height: auto; 
         box-shadow: 0 4px 8px rgba(0,0,0,0.4); 
         background-color: white;
         transition: width 0.2s ease-out; 
+        margin-bottom: 8px; 
       }
 
-      /* CHANGED: Zoom controls moved to the top right */
+      /* CHANGED: Switched to position: fixed and added z-index to lock it to the glass */
       .zoom-controls {
-        position: absolute;
-        top: 16px;
-        right: 16px;
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 9999; /* Forces it above everything else on the phone */
         background-color: rgba(25, 25, 25, 0.85);
         border: 1px solid #FFFFFF33;
         border-radius: 20px;
         display: flex;
         align-items: center;
         padding: 4px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.6);
         backdrop-filter: blur(4px);
       }
       .zoom-btn {
