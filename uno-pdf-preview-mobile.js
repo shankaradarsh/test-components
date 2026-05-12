@@ -134,7 +134,12 @@ class PdfMobileRenderer extends HTMLElement {
       
     } catch (error) {
       console.error("PDF Render Error:", error);
-      this.loadingMsg.innerHTML = `<span style="color: #f44336;">Failed to render document. Data may be corrupted.</span>`;
+      // Print the ACTUAL error to the mobile screen so we don't have to guess
+      this.loadingMsg.innerHTML = `<span style="color: #f44336; font-size: 12px; word-break: break-all;">
+        <strong>Crash Report:</strong><br/>
+        ${error.message || error}<br/><br/>
+        <strong>Base64 Length:</strong> ${base64String ? base64String.length : 0} chars
+      </span>`;
     }
   }
 
