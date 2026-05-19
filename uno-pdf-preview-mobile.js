@@ -13,6 +13,7 @@ class PdfMobileRenderer extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this.isInitialized = false;
     this.zoomLevel = 100;
+    this.lastZoomTouchTs = 0;
   }
 
   connectedCallback() {
@@ -72,8 +73,28 @@ class PdfMobileRenderer extends HTMLElement {
     this.zoomControls = this.shadowRoot.getElementById('zoom-controls');
     this.zoomText = this.shadowRoot.getElementById('zoom-text');
     
-    this.shadowRoot.getElementById('zoom-in-btn').addEventListener('click', () => this.handleZoom(25));
-    this.shadowRoot.getElementById('zoom-out-btn').addEventListener('click', () => this.handleZoom(-25));
+    const zoomInBtn = this.shadowRoot.getElementById('zoom-in-btn');
+    const zoomOutBtn = this.shadowRoot.getElementById('zoom-out-btn');
+
+    const bindZoom = (btn, delta) => {
+      btn.addEventListener('touchend', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.lastZoomTouchTs = Date.now();
+        this.handleZoom(delta);
+      }, { passive: false });
+
+      btn.addEventListener('click', (event) => {
+        if (Date.now() - this.lastZoomTouchTs < 500) {
+          event.preventDefault();
+          return;
+        }
+        this.handleZoom(delta);
+      });
+    };
+
+    bindZoom(zoomInBtn, 25);
+    bindZoom(zoomOutBtn, -25);
 
     this.checkbox.addEventListener('change', (e) => {
       this.continueBtn.disabled = !e.target.checked;
@@ -248,12 +269,14 @@ class PdfMobileRenderer extends HTMLElement {
         margin-bottom: 8px; 
       }
 
-      /* CHANGED: Switched to position: fixed and added z-index to lock it to the glass */
+      /* Keep controls pinned inside the viewer viewport while content scrolls underneath */
       .zoom-controls {
-        position: fixed;
-        top: 24px;
-        right: 24px;
-        z-index: 9999; /* Forces it above everything else on the phone */
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 10000;
+        pointer-events: auto;
+        touch-action: manipulation;
         background-color: rgba(25, 25, 25, 0.85);
         border: 1px solid #FFFFFF33;
         border-radius: 20px;
@@ -264,6 +287,7 @@ class PdfMobileRenderer extends HTMLElement {
         backdrop-filter: blur(4px);
       }
       .zoom-btn {
+        -webkit-appearance: none;
         background: transparent;
         color: #fff;
         border: none;
@@ -275,6 +299,8 @@ class PdfMobileRenderer extends HTMLElement {
         align-items: center;
         cursor: pointer;
         border-radius: 50%;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
       }
       .zoom-btn:active { background-color: #FFFFFF33; }
       #zoom-text {
