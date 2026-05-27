@@ -28,6 +28,12 @@ class PdfMobileRenderer extends HTMLElement {
     }
   }
 
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (name === 'pdf-base64' && newValue && newValue !== oldValue && this.isInitialized) {
+      this.loadDocument(newValue);
+    }
+  }
+
   renderDOM() {
     const container = document.createElement("div");
     container.className = "mobile-renderer-container";
